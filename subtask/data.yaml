@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 4
+names: ['left', 'right', 'speed_limit', 'stop']
+
+roboflow:
+  workspace: myworkspace-juw4b
+  project: traffic_sign_detect-xetdc
+  version: 2
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/myworkspace-juw4b/traffic_sign_detect-xetdc/dataset/2
