@@ -43,6 +43,9 @@ setup(
             'control_lane2 = turtlebot3_autorace_mission.control_lane2:main',
 
             'stop = turtlebot3_autorace_mission.stop_robot:main',
+            
+            'autorace_gui = turtlebot3_autorace_mission.autorace_gui:main',
+            
 
         ],
     },
