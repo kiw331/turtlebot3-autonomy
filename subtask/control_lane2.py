@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 from geometry_msgs.msg import Twist
 import rclpy
 from rclpy.node import Node
