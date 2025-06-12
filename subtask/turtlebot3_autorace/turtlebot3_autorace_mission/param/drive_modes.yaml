@@ -1,0 +1,15 @@
+control_lane:
+  ros__parameters:
+    drive_modes:
+      eco:
+        max_vel: 0.05
+        kp: 0.0025
+        kd: 0.005
+      comfort:
+        max_vel: 0.1
+        kp: 0.0025
+        kd: 0.007
+      sport:
+        max_vel: 0.2
+        kp: 0.0035
+        kd: 0.007

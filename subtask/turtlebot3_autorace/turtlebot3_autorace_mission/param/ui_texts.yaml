@@ -1,0 +1,5 @@
+control_lane:
+  ros__parameters:
+    ui_texts:
+      welcome_prompt: ">> 프로젝트 시작. 사용자 이름을 입력하세요: "
+      # setting_prompt_template: ">> {user_name}님의 주행 환경 설정을 시작합니다..."
