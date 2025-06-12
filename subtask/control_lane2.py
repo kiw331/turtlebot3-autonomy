@@ -19,6 +19,10 @@ class ControlLane(Node):
         self.sub_stop_line = self.create_subscription(Bool, '/detect/stop_line', self.callback_stop_line, 1)
         self.sub_sign = self.create_subscription(String, '/detect/sign', self.callback_sign, 1)
 
+        self.sub_level_crossing = self.create_subscription(
+            String, '/detect/level_crossing_state', self.callback_level_crossing, 1) # 차단바
+
+
         # 퍼블리셔
         self.pub_cmd_vel = self.create_publisher(Twist, '/control/cmd_vel', 1)
 
@@ -115,21 +119,24 @@ class ControlLane(Node):
 
         if self.state == 'STOP_SIGN':
             self.publish_stop()
-            time.sleep(3)
-            self.get_logger().info('Stop sign stop complete → back to NORMAL')
-            self.state = 'NORMAL'
+            time.sleep(1)
+            self.get_logger().info('Stop sign stop complete → entering WAIT_LEVEL_CROSSING state')
+            self.state = 'WAIT_LEVEL_CROSSING'
             return
-        
+
+        if self.state == 'WAIT_LEVEL_CROSSING':
+            self.publish_stop()
+            return
+
+        # 기존 soft turn 및 PID 주행 로직 이하 동일
         current_time = time.time()
 
-        # soft turn 진행도 계산
         if self.state in ['LEFT_TURN', 'RIGHT_TURN']:
             progress = (current_time - self.turn_start_time) / self.turn_duration
             progress = min(progress, 1.0)
         else:
             progress = 0.0
 
-        # bias 계산
         if self.state == 'LEFT_TURN':
             desired_bias = -60 * progress
         elif self.state == 'RIGHT_TURN':
@@ -146,13 +153,30 @@ class ControlLane(Node):
         angular_z = Kp * error + Kd * (error - self.last_error)
         self.last_error = error
 
-        # soft turn 시 속도 살짝 줄이기
         velocity_limit = 0.03 if self.state in ['LEFT_TURN', 'RIGHT_TURN'] else 0.05
 
         twist = Twist()
         twist.linear.x = min(self.MAX_VEL * (max(1 - abs(error) / 500, 0) ** 2.2), velocity_limit)
         twist.angular.z = -max(angular_z, -2.0) if angular_z < 0 else -min(angular_z, 2.0)
         self.pub_cmd_vel.publish(twist)
+
+
+    def callback_level_crossing(self, msg):
+        if self.state == 'WAIT_LEVEL_CROSSING':
+            # 첫 wait 상태 → 바로 ready 상태 진입
+            self.get_logger().info("Level crossing: waiting for first stop signal")
+            self.state = 'WAIT_LC_READY'
+
+        elif self.state == 'WAIT_LC_READY':
+            if msg.data == 'stop':
+                self.get_logger().info("Level crossing: stop detected → waiting for go")
+                self.state = 'WAIT_LC_GO'
+
+        elif self.state == 'WAIT_LC_GO':
+            if msg.data == 'go':
+                self.get_logger().info("Level crossing opened → Resuming driving")
+                self.state = 'NORMAL'
+
 
     def callback_avoid_cmd(self, twist_msg):
         self.avoid_twist = twist_msg
