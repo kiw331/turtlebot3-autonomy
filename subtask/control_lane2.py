@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 from geometry_msgs.msg import Twist
 import rclpy
 from rclpy.node import Node
@@ -19,21 +20,19 @@ class ControlLane(Node):
         self.sub_sign = self.create_subscription(String, '/detect/sign', self.callback_sign, 1)
 
         self.sub_level_crossing = self.create_subscription(
-            String, '/detect/level_crossing_state', self.callback_level_crossing, 1) # 차단바
+            String, '/detect/level_crossing_state', self.callback_level_crossing, 1)
 
 
-        # 퍼블리셔
         self.pub_cmd_vel = self.create_publisher(Twist, '/control/cmd_vel', 1)
 
-        # 내부 변수
         self.last_error = 0
-        self.base_max_vel = 0.1
+        self.base_max_vel = 0.15
         self.MAX_VEL = self.base_max_vel
         self.avoid_active = False
         self.avoid_twist = Twist()
 
         self.state = 'NORMAL'
-        self.turn_direction = None  # 'LEFT' or 'RIGHT'
+        self.turn_direction = None
 
         self.stop_line_suppression_until = 0
         self.suppression_duration = 3.0
@@ -42,10 +41,15 @@ class ControlLane(Node):
         self.sign_suppression_duration = 5.0
 
         self.turn_start_time = 0
-        self.turn_duration = 2.0  # soft turn 유지 시간
+        self.turn_duration = 2.0
 
-    def callback_get_max_vel(self, max_vel_msg):
-        self.base_max_vel = max_vel_msg.data
+        self.speed_limit_vel = 0.3
+
+        self.crossing_cleared = False
+        self.level_crossing_stop_detected = False
+
+    def callback_get_max_vel(self, msg):
+        self.base_max_vel = msg.data
         self.MAX_VEL = self.base_max_vel
 
     def callback_stop_line(self, msg):
@@ -70,41 +74,55 @@ class ControlLane(Node):
             return
 
         sign = msg.data
-
         if sign == 'None':
             return
 
-        if sign == 'speed_30':
-            self.MAX_VEL = 0.05
-            self.get_logger().info('Speed limit 30 detected → MAX_VEL = 0.05')
-        elif sign == 'speed_40':
-            self.MAX_VEL = 0.07
-            self.get_logger().info('Speed limit 40 detected → MAX_VEL = 0.07')
-        elif sign == 'speed_50':
-            self.MAX_VEL = 0.1
-            self.get_logger().info('Speed limit 50 detected → MAX_VEL = 0.1')
+        if sign == 'speed_limit':
+            self.get_logger().info('Speed limit sign detected → keeping current MAX_VEL')
+            self.MAX_VEL = self.speed_limit_vel
 
-        elif sign == 'stop' and self.state == 'NORMAL':
-            self.get_logger().info('Stop sign detected → STOP_SIGN state')
-            self.state = 'STOP_SIGN'
-
-        elif sign == 'left_turn' and self.state == 'NORMAL':
-            self.get_logger().info('Left turn detected → entering LEFT_TURN state')
+        elif sign == 'left' and self.state == 'NORMAL':
+            self.get_logger().info('Left sign detected → entering LEFT_TURN state')
             self.state = 'LEFT_TURN'
             self.turn_direction = 'LEFT'
             self.turn_start_time = current_time
 
-        elif sign == 'right_turn' and self.state == 'NORMAL':
-            self.get_logger().info('Right turn detected → entering RIGHT_TURN state')
+        elif sign == 'right' and self.state == 'NORMAL':
+            self.get_logger().info('Right sign detected → entering RIGHT_TURN state')
             self.state = 'RIGHT_TURN'
             self.turn_direction = 'RIGHT'
             self.turn_start_time = current_time
 
-        self.sign_suppression_until = current_time + self.sign_suppression_duration
+        elif sign == 'stop' and self.state == 'NORMAL':
+            self.get_logger().info('Stop sign detected → entering STOPPING state')
+            self.state = 'STOPPING'
+            self.stop_sign_start_time = current_time
+
+    def callback_level_crossing(self, msg):
+
+        if self.state != 'WAIT_LEVEL_CROSSING':
+            return
+
+        signal = msg.data
+        # self.get_logger().info(f'Received level crossing signal: {signal}')
+
+        if signal == 'stop':
+            self.level_crossing_stop_detected = True
+
+        if self.crossing_cleared:
+            return
+
+        if signal == 'go' and self.level_crossing_stop_detected:
+            self.crossing_cleared = True
+            self.get_logger().info('Level crossing open → clearance granted')
+
+
 
     def callback_follow_lane(self, desired_center):
         if self.avoid_active:
             return
+
+        current_time = time.time()
 
         if self.state == 'STOP':
             self.publish_stop()
@@ -116,30 +134,47 @@ class ControlLane(Node):
             self.publish_stop()
             return
 
-        if self.state == 'STOP_SIGN':
-            self.publish_stop()
-            time.sleep(1)
-            self.get_logger().info('Stop sign stop complete → entering WAIT_LEVEL_CROSSING state')
-            self.state = 'WAIT_LEVEL_CROSSING'
-            return
+        if self.state == 'STOPPING':
+            if current_time - self.stop_sign_start_time >= 8:
+                self.get_logger().info('Stop sign wait complete → stopping and entering WAIT_LEVEL_CROSSING')
+                self.publish_stop()
+                self.state = 'WAIT_LEVEL_CROSSING'
+                return
+            # 3초 동안 주행 유지 → 아래 PID 계속 수행
 
         if self.state == 'WAIT_LEVEL_CROSSING':
-            self.publish_stop()
+            self.get_logger().info(f'check level_crossing_stop_detected: {self.level_crossing_stop_detected}')
+            self.get_logger().info(f'check crossing_cleared: {self.crossing_cleared}')
+
+            if self.crossing_cleared:
+                self.get_logger().info('Level crossing cleared → returning to NORMAL state')
+                self.state = 'NORMAL'
+                self.level_crossing_stop_detected = False
+                self.crossing_cleared = False
+            else:
+                self.publish_stop()  # 아직 clearance 안 됐을 때만 정지 유지
             return
 
-        # 기존 soft turn 및 PID 주행 로직 이하 동일
-        current_time = time.time()
-
         if self.state in ['LEFT_TURN', 'RIGHT_TURN']:
+            if not hasattr(self, 'turn_start_time') or self.turn_start_time is None:
+                self.turn_start_time = current_time
+                self.turn_duration = 3.0
+
             progress = (current_time - self.turn_start_time) / self.turn_duration
             progress = min(progress, 1.0)
+            if progress >= 1.0:
+                self.get_logger().info('Turn completed → returning to NORMAL state')
+                self.state = 'NORMAL'
+                progress = 0.0
+                self.turn_start_time = None
+                self.sign_suppression_until = current_time + self.sign_suppression_duration
         else:
             progress = 0.0
 
         if self.state == 'LEFT_TURN':
-            desired_bias = -60 * progress
+            desired_bias = -100 * progress
         elif self.state == 'RIGHT_TURN':
-            desired_bias = 60 * progress
+            desired_bias = 100 * progress
         else:
             desired_bias = 0
 
@@ -152,30 +187,12 @@ class ControlLane(Node):
         angular_z = Kp * error + Kd * (error - self.last_error)
         self.last_error = error
 
-        velocity_limit = 0.03 if self.state in ['LEFT_TURN', 'RIGHT_TURN'] else 0.05
+        velocity_limit = 0.04 if self.state in ['LEFT_TURN', 'RIGHT_TURN'] else 0.05
 
         twist = Twist()
         twist.linear.x = min(self.MAX_VEL * (max(1 - abs(error) / 500, 0) ** 2.2), velocity_limit)
         twist.angular.z = -max(angular_z, -2.0) if angular_z < 0 else -min(angular_z, 2.0)
         self.pub_cmd_vel.publish(twist)
-
-
-    def callback_level_crossing(self, msg):
-        if self.state == 'WAIT_LEVEL_CROSSING':
-            # 첫 wait 상태 → 바로 ready 상태 진입
-            self.get_logger().info("Level crossing: waiting for first stop signal")
-            self.state = 'WAIT_LC_READY'
-
-        elif self.state == 'WAIT_LC_READY':
-            if msg.data == 'stop':
-                self.get_logger().info("Level crossing: stop detected → waiting for go")
-                self.state = 'WAIT_LC_GO'
-
-        elif self.state == 'WAIT_LC_GO':
-            if msg.data == 'go':
-                self.get_logger().info("Level crossing opened → Resuming driving")
-                self.state = 'NORMAL'
-
 
     def callback_avoid_cmd(self, twist_msg):
         self.avoid_twist = twist_msg
