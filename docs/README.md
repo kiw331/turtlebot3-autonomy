@@ -38,4 +38,5 @@ Bias가 적용된 중심값으로 PID 제어 수행 → 부드러운 선회
 진행 완료 후 NORMAL 상태 복귀
 
 
-### 
+### 발표
+https://www.notion.so/3-1-21122b700e8380378729efcaf2fe4099?source=copy_link
