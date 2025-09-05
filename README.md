@@ -1,13 +1,12 @@
 # 🚗 TurtleAutonomy — Gazebo 자율주행 시뮬레이션 + 실환경 모바일 매니퓰레이터
 
-차선 추종 기반 자율주행과 ArUco 마커 기반 Pick-and-Place를 **ROS 2**로 통합한 프로젝트입니다.
-**Gazebo 시뮬레이션**과 \*\*실환경(TurtleBot3 Waffle + OpenMANIPULATOR-X)\*\*을 같은 파이프라인으로 연결해 **디지털 트윈** 형태로 운영합니다.
+>Gazebo 기반 자율주행 시뮬레이션  
+차선 추종 및 모바일 매니퓰레이터 제어
 
-> (디지털 트윈 개념 이미지: 위–아래 구도. 위=Gazebo 차선 시뮬, 아래=실환경 차선+ArUco. 가운데 “Digital Twin” 라벨)
 
----
 
-## ✨ 4줄 요약
+
+## ✨ 개요
 
 * Gazebo와 실환경 TurtleBot3를 동일 파이프라인으로 연결한 **차선 추종 자율주행**
 * **ArUco 마커**로 목표 위치 추정, **MoveIt**으로 매니퓰레이터 **Pick-and-Place**
@@ -32,33 +31,8 @@
   * TurtleBot3 Waffle, OpenMANIPULATOR-X, Logitech C270
   * (실험) message\_filters로 카메라 프레임 **ApproximateTimeSynchronizer**
 
-> (시스템 아키텍처 다이어그램: 카메라→차선인식노드→제어노드(/cmd\_vel), 카메라→ArUco→Pick\&Place, 공통 파라미터 서버, RViz/Gazebo/실환경 스위치)
 
----
 
-## 📁 폴더 구조(예시)
-
-```
-.
-├─ src/
-│  ├─ lane_detector.py          # CLAHE/BEV/중앙선 추출
-│  ├─ lane_controller.py        # PD 제어 → /cmd_vel
-│  ├─ aruco_tracker.py          # rvec/tvec 변환, 포즈 추정
-│  ├─ pick_and_place.py         # MoveIt 기반 시퀀스
-│  └─ gui/                      # (선택) PyQt UI
-├─ launch/
-│  ├─ sim.launch.py             # Gazebo 맵/로봇 스폰 + 노드
-│  └─ real.launch.py            # 실환경 센서/모터 bringup + 노드
-├─ config/
-│  ├─ camera.yaml               # 카메라 캘리브레이션
-│  ├─ pd.yaml                   # PD 게인/속도 제한
-│  └─ bev.yaml                  # BEV src/dst 좌표
-└─ docs/
-   ├─ 프로젝트3(가제보).pdf
-   └─ 프로젝트3(실환경).pdf
-```
-
----
 
 ## ▶️ 실행 방법
 
@@ -146,17 +120,18 @@ ros2 run aruco_yolo pick_and_place
 * 실환경에서 **차선 추종 + ArUco 기반 Pick-and-Place** 시연 성공
 * 다양한 조도에서 차선 인식률 향상, 프레임 동기화로 처리 안정성 확보
 
+
+<!--
 > (결과 비교 이미지: 시뮬레이션 검출 결과 vs 실환경 검출 결과)
 > (Pick\&Place 시퀀스 다이어그램/타임라인)
-
----
+-->
 
 ## 🎬 데모
-
+<!--
 * Gazebo 시뮬레이션: [https://github.com/user-attachments/assets/6378f33f-8f00-4a66-a2dc-0da84ff88955](https://github.com/user-attachments/assets/6378f33f-8f00-4a66-a2dc-0da84ff88955)
 * 실환경 주행(매니퓰레이터 포함): [https://github.com/user-attachments/assets/4f77d3ca-bcff-42cb-8871-0b32b93b8788](https://github.com/user-attachments/assets/4f77d3ca-bcff-42cb-8871-0b32b93b8788)
+-->
 
----
 
 <!--
 
@@ -164,8 +139,6 @@ ros2 run aruco_yolo pick_and_place
 
 * [`docs/프로젝트3(가제보).pdf`](docs/프로젝트3%28가제보%29.pdf)
 * [`docs/프로젝트3(실환경).pdf`](docs/프로젝트3%28실환경%29.pdf)
-
-> (문서 미리보기 썸네일 자리)
 
 
 -->
